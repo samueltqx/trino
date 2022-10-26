@@ -415,6 +415,7 @@
                                 <exclude>**/TestDeltaLakeSharedGlueMetastoreWithTableRedirections.java</exclude>
                                 <exclude>**/TestDeltaLakeTableWithCustomLocationUsingGlueMetastore.java</exclude>
                                 <exclude>**/TestDeltaLakeRenameToWithGlueMetastore.java</exclude>
+                                <exclude>**/TestDeltaLakeRegisterTableProcedureUsingGlueMetastore.java</exclude>
                                 <exclude>**/TestDeltaLakeGcsConnectorSmokeTest.java</exclude>
                             </excludes>
                         </configuration>
@@ -465,6 +466,7 @@
                                 <include>**/TestDeltaLakeSharedGlueMetastoreWithTableRedirections.java</include>
                                 <include>**/TestDeltaLakeTableWithCustomLocationUsingGlueMetastore.java</include>
                                 <include>**/TestDeltaLakeRenameToWithGlueMetastore.java</include>
+                                <include>**/TestDeltaLakeRegisterTableProcedureUsingGlueMetastore.java</include>
                             </includes>
                         </configuration>
                     </plugin>
