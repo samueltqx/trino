@@ -13,10 +13,15 @@
  */
 package io.trino.plugin.iceberg.catalog.glue;
 
+import com.amazonaws.arn.Arn;
 import com.amazonaws.services.glue.AWSGlueAsync;
 import com.amazonaws.services.glue.AWSGlueAsyncClientBuilder;
+import com.amazonaws.services.glue.model.DeleteDatabaseRequest;
+import com.amazonaws.services.glue.model.DeleteResourcePolicyRequest;
 import com.amazonaws.services.glue.model.DeleteTableRequest;
 import com.amazonaws.services.glue.model.GetTableRequest;
+import com.amazonaws.services.glue.model.PutResourcePolicyRequest;
+import com.amazonaws.services.glue.model.Table;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.DeleteObjectsRequest;
@@ -29,6 +34,7 @@ import io.trino.plugin.iceberg.BaseIcebergConnectorSmokeTest;
 import io.trino.plugin.iceberg.IcebergQueryRunner;
 import io.trino.plugin.iceberg.SchemaInitializer;
 import io.trino.testing.QueryRunner;
+import io.trino.testing.sql.TestTable;
 import io.trino.testing.sql.TestView;
 import org.apache.iceberg.FileFormat;
 import org.testng.annotations.AfterClass;
@@ -53,14 +59,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public class TestIcebergGlueCatalogConnectorSmokeTest
         extends BaseIcebergConnectorSmokeTest
 {
+    private final String region;
     private final String bucketName;
     private final String schemaName;
     private final AWSGlueAsync glueClient;
 
-    @Parameters("s3.bucket")
-    public TestIcebergGlueCatalogConnectorSmokeTest(String bucketName)
+    @Parameters({"s3.region", "s3.bucket"})
+    public TestIcebergGlueCatalogConnectorSmokeTest(String region, String bucketName)
     {
         super(FileFormat.PARQUET);
+        this.region = requireNonNull(region, "region is null");
         this.bucketName = requireNonNull(bucketName, "bucketName is null");
         this.schemaName = "test_iceberg_smoke_" + randomTableSuffix();
         glueClient = AWSGlueAsyncClientBuilder.defaultClient();
@@ -139,6 +147,51 @@ public class TestIcebergGlueCatalogConnectorSmokeTest
     {
         assertThatThrownBy(super::testRenameSchema)
                 .hasStackTraceContaining("renameNamespace is not supported for Iceberg Glue catalogs");
+    }
+
+    @Test
+    public void testShowTablesInAccessDeniedSchema()
+    {
+        String schemaName = "test_permission_denied_" + randomTableSuffix();
+        assertUpdate("CREATE SCHEMA " + schemaName);
+
+        String policyHash = null;
+        try (TestTable table = new TestTable(getQueryRunner()::execute, schemaName + ".test_show_tables", "(col int)")) {
+            String tableName = table.getName().substring(schemaName.length() + 1);
+            Table glueTable = glueClient.getTable(new GetTableRequest().withDatabaseName(schemaName).withName(tableName)).getTable();
+            String user = glueTable.getCreatedBy();
+            String accountId = Arn.fromString(user).getAccountId();
+            String policy = """
+                    {
+                        "Statement": [
+                            {
+                                "Principal": {
+                                    "AWS": [
+                                        "%s"
+                                    ]
+                                },
+                                "Sid": "GetTablesAccessDeny",
+                                "Effect": "Deny",
+                                "Action": [
+                                    "glue:GetTables"
+                                ],
+                                "Resource": [
+                                    "arn:aws:glue:%s:%s:database/%s"
+                                ]
+                            }
+                        ]
+                    }
+                    """.formatted(user, region, accountId, schemaName);
+            policyHash = glueClient.putResourcePolicy(new PutResourcePolicyRequest().withPolicyInJson(policy)).getPolicyHash();
+
+            assertQueryReturnsEmptyResult("SHOW TABLES IN " + schemaName);
+        }
+        finally {
+            if (policyHash != null) {
+                glueClient.deleteResourcePolicy(new DeleteResourcePolicyRequest().withPolicyHashCondition(policyHash));
+            }
+            glueClient.deleteDatabase(new DeleteDatabaseRequest().withName(schemaName));
+        }
     }
 
     @Test
