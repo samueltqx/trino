@@ -393,7 +393,7 @@ public class BigQueryMetadata
     {
         BigQueryClient client = bigQueryClientFactory.create(session);
         checkArgument(properties.isEmpty(), "Can't have properties for schema creation");
-        DatasetInfo datasetInfo = DatasetInfo.newBuilder(schemaName).build();
+        DatasetInfo datasetInfo = DatasetInfo.newBuilder(getProjectId(client), schemaName).build();
         client.createSchema(datasetInfo);
     }
 
@@ -401,8 +401,9 @@ public class BigQueryMetadata
     public void dropSchema(ConnectorSession session, String schemaName)
     {
         BigQueryClient client = bigQueryClientFactory.create(session);
-        String remoteSchemaName = getRemoteSchemaName(client, getProjectId(client), schemaName);
-        client.dropSchema(DatasetId.of(remoteSchemaName));
+        String projectId = getProjectId(client);
+        String remoteSchemaName = getRemoteSchemaName(client, projectId, schemaName);
+        client.dropSchema(DatasetId.of(projectId, remoteSchemaName));
     }
 
     @Override

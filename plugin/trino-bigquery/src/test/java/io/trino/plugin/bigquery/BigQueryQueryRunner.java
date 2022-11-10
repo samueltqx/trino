@@ -42,6 +42,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static com.google.cloud.bigquery.BigQuery.DatasetDeleteOption.deleteContents;
 import static com.google.cloud.bigquery.BigQuery.DatasetListOption.labelFilter;
@@ -115,7 +116,7 @@ public final class BigQueryQueryRunner
 
         public BigQuerySqlExecutor()
         {
-            this.bigQuery = createBigQueryClient();
+            this.bigQuery = createBigQueryClient(Optional.empty());
         }
 
         @Override
@@ -174,14 +175,14 @@ public final class BigQueryQueryRunner
             return bigQuery;
         }
 
-        private static BigQuery createBigQueryClient()
+        private static BigQuery createBigQueryClient(Optional<String> projectId)
         {
             try {
                 InputStream jsonKey = new ByteArrayInputStream(Base64.getDecoder().decode(BIGQUERY_CREDENTIALS_KEY));
-                return BigQueryOptions.newBuilder()
-                        .setCredentials(ServiceAccountCredentials.fromStream(jsonKey))
-                        .build()
-                        .getService();
+                BigQueryOptions.Builder builder = BigQueryOptions.newBuilder()
+                        .setCredentials(ServiceAccountCredentials.fromStream(jsonKey));
+                projectId.ifPresent(builder::setProjectId);
+                return builder.build().getService();
             }
             catch (IOException e) {
                 throw new UncheckedIOException(e);

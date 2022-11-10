@@ -77,8 +77,13 @@ public class BigQueryClient
     private final ViewMaterializationCache materializationCache;
     private final boolean caseInsensitiveNameMatching;
     private final LoadingCache<String, List<Dataset>> remoteDatasetCache;
+    private final Optional<String> projectId;
 
-    public BigQueryClient(BigQuery bigQuery, boolean caseInsensitiveNameMatching, ViewMaterializationCache materializationCache, Duration metadataCacheTtl)
+    public BigQueryClient(BigQuery bigQuery,
+            boolean caseInsensitiveNameMatching,
+            ViewMaterializationCache materializationCache,
+            Duration metadataCacheTtl,
+            Optional<String> projectId)
     {
         this.bigQuery = requireNonNull(bigQuery, "bigQuery is null");
         this.materializationCache = requireNonNull(materializationCache, "materializationCache is null");
@@ -87,6 +92,7 @@ public class BigQueryClient
                 .expireAfterWrite(metadataCacheTtl.toMillis(), MILLISECONDS)
                 .shareNothingWhenDisabled()
                 .build(CacheLoader.from(this::listDatasetsFromBigQuery));
+        this.projectId = requireNonNull(projectId, "projectId is null");
     }
 
     public Optional<RemoteDatabaseObject> toRemoteDataset(String projectId, String datasetName)
@@ -181,7 +187,7 @@ public class BigQueryClient
 
     public String getProjectId()
     {
-        return bigQuery.getOptions().getProjectId();
+        return projectId.orElse(bigQuery.getOptions().getProjectId());
     }
 
     public Iterable<Dataset> listDatasets(String projectId)
